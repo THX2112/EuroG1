@@ -75,7 +75,11 @@ int r1 = 0;      //value of select pin at the 4051 (s1)
 int r2 = 0;      //value of select pin at the 4051 (s2)
 int count = 0;   //which y pin we are selecting
 int mValue[17];
-
+int trig = 9;		//	Pin 9 for gate input
+bool triggered;
+bool checkTrig;
+int note = 0;
+int sentNote = 0;
 
 void setup()
 {
@@ -83,9 +87,9 @@ void setup()
 
 	// Connect the handleNoteOn function to the library,
 	// so it is called upon reception of a NoteOn.
-	MIDI.setHandleNoteOn(handleNoteOn);  // Put only the name of the function
+	//MIDI.setHandleNoteOn(handleNoteOn);  // Put only the name of the function
 	// Do the same for NoteOffs
-	MIDI.setHandleNoteOff(handleNoteOff);
+	//MIDI.setHandleNoteOff(handleNoteOff);
 	// Initiate MIDI communications, listen to all channels
 
 	pinMode(CC20LFOWave, INPUT_PULLUP);
@@ -100,16 +104,40 @@ void setup()
 
 void loop()
 {
-	//	Only check controls every 10th of a second for less MIDI latency
+	//	Only check controls every 50ms for less MIDI latency. Faster has glitchy 4051 behaviour.
 	if (millis() - controlTimer > 50)
 	{
 		controlTimer = millis();
 		readControls();
 	}
 
-	//	Handle MIDI Note-Ons and Note-Offs
-	MIDI.read();
 	//	Handle CV/TRIG inputs
+	checkTrig = digitalRead(trig);
+	if (checkTrig && !triggered)		//	Key down.
+	{
+		triggered = true;
+		//	GET CV CODE HERE
+		MIDI.sendNoteOn(note, 127, 1);
+		sentNote = note;
+	}
+	else if (checkTrig && triggered)	//	Key up but another key held down.
+	{
+		MIDI.sendNoteOff(sentNote,0,1);
+		MIDI.sendNoteOn(note, 127, 1);
+	}
+	if (!checkTrig && triggered)		//	Key up
+	{
+		MIDI.sendNoteOff(sentNote, 0, 1);
+		triggered = false;
+	}
+
+
+
+	//	Handle MIDI Note-Ons and Note-Offs
+	MIDI.read();	//	All MIDI inputs passed through to G1.
+
+
+
 
 }
 
