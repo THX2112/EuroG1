@@ -27,6 +27,8 @@ int CC75VCAEnvD = 14;
 int CC31VCAEnvS = 15;
 int CC72VCAEnvR = 16;
 
+int CVIn = A7;
+
 //	CONTROL VALUES
 
 int CC07MasterVolumeValue;
@@ -80,17 +82,14 @@ bool triggered;
 bool checkTrig;
 int note = 0;
 int sentNote = 0;
+int ADCValue;
+float voltage;
+float floatNote;
+double Vcc;
 
 void setup()
 {
 	MIDI.begin(MIDI_CHANNEL_OMNI);
-
-	// Connect the handleNoteOn function to the library,
-	// so it is called upon reception of a NoteOn.
-	//MIDI.setHandleNoteOn(handleNoteOn);  // Put only the name of the function
-	// Do the same for NoteOffs
-	//MIDI.setHandleNoteOff(handleNoteOff);
-	// Initiate MIDI communications, listen to all channels
 
 	pinMode(CC20LFOWave, INPUT_PULLUP);
 	pinMode(9, INPUT);
@@ -99,6 +98,9 @@ void setup()
 	pinMode(10, OUTPUT);    // s0
 	pinMode(11, OUTPUT);    // s1
 	pinMode(12, OUTPUT);    // s2
+
+	delay(100);
+	Vcc = readVcc()/1000.0;
 
 }
 
@@ -113,18 +115,20 @@ void loop()
 
 	//	Handle CV/TRIG inputs
 	checkTrig = digitalRead(trig);
-	if (checkTrig && !triggered)		//	Key down.
+	if (checkTrig && !triggered)		//	Key pressed.
 	{
 		triggered = true;
-		//	GET CV CODE HERE
+		//	CV is 0-10V 1V/Oct, scaled down to 0-5V.
+		ADCValue = analogRead(CVIn);
+		//Vcc = 1024;
+		voltage = ((ADCValue / 1024.0) * Vcc) ; //+2
+		floatNote = double(((voltage * 2) / .083) + 24.0) + .5; //.5 is for rounding, *2 is to scale back to 0-10V.
+		note = floatNote;
+
 		MIDI.sendNoteOn(note, 127, 1);
 		sentNote = note;
 	}
-	else if (checkTrig && triggered)	//	Key up but another key held down.
-	{
-		MIDI.sendNoteOff(sentNote,0,1);
-		MIDI.sendNoteOn(note, 127, 1);
-	}
+
 	if (!checkTrig && triggered)		//	Key up
 	{
 		MIDI.sendNoteOff(sentNote, 0, 1);
@@ -136,30 +140,7 @@ void loop()
 	//	Handle MIDI Note-Ons and Note-Offs
 	MIDI.read();	//	All MIDI inputs passed through to G1.
 
-
-
-
 }
-
-// -----------------------------------------------------------------------------
-// This function will be automatically called when a NoteOn is received.
-// It must be a void-returning function with the correct parameters,
-// see documentation here:
-// http://arduinomidilib.fortyseveneffects.com/a00022.html
-void handleNoteOn(byte channel, byte pitch, byte velocity)
-{
-	// Do whatever you want when a note is pressed.
-	// Try to keep your callbacks short (no delays ect)
-	// otherwise it would slow down the loop() and have a bad impact
-	// on real-time performance.
-}
-void handleNoteOff(byte channel, byte pitch, byte velocity)
-{
-	// Do something when the note is released.
-	// Note that NoteOn messages with 0 velocity are interpreted as NoteOffs.
-}
-// -----------------------------------------------------------------------------
-
 
 void readControls()
 {
@@ -366,4 +347,20 @@ void readControls()
 
 
 }
+
+long readVcc()
+{
+	long result;
+	// Read 1.1V reference against AVcc
+	ADMUX = _BV(REFS0) | _BV(MUX3) | _BV(MUX2) | _BV(MUX1);
+	delay(2); 	// Wait for Vref to settle
+	ADCSRA |= _BV(ADSC); // Convert
+	while (bit_is_set(ADCSRA, ADSC));
+	result = ADCL;
+	result |= ADCH << 8;
+	result = 1125300L / result;	// Back-calculate AVcc in mV
+	return result;
+}
+
+
 
