@@ -1,6 +1,6 @@
 #include <digitalWriteFast.h>
 #include <MIDI.h>
-#include <prescaler.h>
+//#include <prescaler.h>
 
 MIDI_CREATE_DEFAULT_INSTANCE();
 
@@ -88,11 +88,13 @@ int ADCValue;
 float voltage;
 float floatNote;
 double Vcc;
+int dSentNote;
+int dNote;
 
 void setup()
 {
 	MIDI.begin(MIDI_CHANNEL_OMNI);
-	setClockPrescaler(16);
+	//setClockPrescaler(16);
 	pinMode(CC20LFOWave, INPUT_PULLUP);
 	pinMode(9, INPUT);
 
@@ -101,8 +103,10 @@ void setup()
 	pinMode(11, OUTPUT);    // s1
 	pinMode(12, OUTPUT);    // s2
 
-	trueDelay(100);
-	Vcc = readVcc() / 1000.0;
+	//trueDelay(100);
+	delay(100);
+
+	//Vcc = readVcc() / 1000.0;
 
 	
 	//	Set prescale for faster analogRead
@@ -125,10 +129,13 @@ void setup()
 
 void loop()
 {
-	//	Only check controls every 5ms for less MIDI latency.
-	if (trueMillis() - controlTimer > 5)
+	//	Only check controls every 1ms for less MIDI latency.
+	//if (trueMillis() - controlTimer > 1)
+	if (millis() - controlTimer > 1)
+
 	{
-		controlTimer = trueMillis();
+		//controlTimer = trueMillis();
+		controlTimer = millis();
 		readControls();
 	}
 
@@ -142,12 +149,15 @@ void loop()
 		//floatNote = double(((voltage) / 0.083) + .5); //.5 is for rounding.
 		//floatNote = double(((voltage) / 0.083) + .5); //.5 is for rounding.
 		note = ((voltage / .083) + .5);
-
+		dNote = (note + 12);
 		//note = floatNote;	// +12? +24?
 		if (note != sentNote || triggered==false) {		//	If this is a new note OR a first note...
 			MIDI.sendNoteOff(sentNote, 0, 1);			//	Stop previous note in case it's still playing.
+			//MIDI.sendNoteOff(dSentNote, 0, 1);
 			MIDI.sendNoteOn(note, 127, 1);
+			//MIDI.sendNoteOn(dNote, 127, 1);
 			sentNote = note;
+			dSentNote = dNote;
 			triggered = true;
 		}
 	}
@@ -155,6 +165,8 @@ void loop()
 	if (!checkTrig && triggered)		//	First Key up
 	{
 		MIDI.sendNoteOff(sentNote, 0, 1);
+		//MIDI.sendNoteOff(dSentNote, 0, 1);
+
 		triggered = false;
 	}
 
