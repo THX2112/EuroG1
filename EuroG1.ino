@@ -1,6 +1,5 @@
 #include <digitalWriteFast.h>
 #include <MIDI.h>
-//#include <prescaler.h>
 
 MIDI_CREATE_DEFAULT_INSTANCE();
 
@@ -94,7 +93,6 @@ int dNote;
 void setup()
 {
 	MIDI.begin(MIDI_CHANNEL_OMNI);
-	//setClockPrescaler(16);
 	pinMode(CC20LFOWave, INPUT_PULLUP);
 	pinMode(9, INPUT);
 
@@ -103,59 +101,32 @@ void setup()
 	pinMode(11, OUTPUT);    // s1
 	pinMode(12, OUTPUT);    // s2
 
-	//trueDelay(100);
-	//delay(100);
-
-	//Vcc = readVcc() / 1000.0;
-
-
-	//	Set prescale for faster analogRead
-
-	// defines for setting and clearing register bits
-	//#ifndef cbi
-	//#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
-	//#endif
-	//#ifndef sbi
-	//#define sbi(sfr, bit) (_SFR_BYTE(sfr) |= _BV(bit))
-	//#endif
-	//	// set prescale to 16
-	//	sbi(ADCSRA, ADPS2);
-	//	cbi(ADCSRA, ADPS1);
-	//	cbi(ADCSRA, ADPS0);
-
 	//	Kill any spurious notes on startup.
 	allNotesOff();
 }
 
 void loop()
 {
-	//	Only check controls every 1ms for less MIDI latency.
-	//if (trueMillis() - controlTimer > 1)
+	//	Only check controls every 5ms for less MIDI latency.
 	if (millis() - controlTimer > 5)
 
 	{
-		//controlTimer = trueMillis();
 		controlTimer = millis();
 		readControls();
 	}
 
 	//	Handle CV/GATE inputs
 	checkTrig = digitalRead(trig);
-	if (checkTrig)		//	Key pressed. && !triggered
+	if (checkTrig)		//	Key pressed.
 	{
 		//	CV is 0-5V 1V/Oct
 		ADCValue = analogRead(CVIn);
-		voltage = ((ADCValue / 1024.0) * 5); //	+2?
-		//floatNote = double(((voltage) / 0.083) + .5); //.5 is for rounding.
-		//floatNote = double(((voltage) / 0.083) + .5); //.5 is for rounding.
+		voltage = ((ADCValue / 1024.0) * 5);
 		note = ((voltage / .083) + .5);
 		dNote = (note + 12);
-		//note = floatNote;	// +12? +24?
 		if (note != sentNote || triggered==false) {		//	If this is a new note OR a first note...
 			MIDI.sendNoteOff(sentNote, 0, 1);			//	Stop previous note in case it's still playing.
-			//MIDI.sendNoteOff(dSentNote, 0, 1);
 			MIDI.sendNoteOn(note, 127, 1);
-			//MIDI.sendNoteOn(dNote, 127, 1);
 			sentNote = note;
 			dSentNote = dNote;
 			triggered = true;
@@ -165,7 +136,6 @@ void loop()
 	if (!checkTrig && triggered)		//	First Key up
 	{
 		MIDI.sendNoteOff(sentNote, 0, 1);
-		//MIDI.sendNoteOff(dSentNote, 0, 1);
 
 		triggered = false;
 	}
@@ -196,7 +166,6 @@ void readControls()
 		//	Fill array(1-16) with values from multiplexer
 		mValue[count + 1] = analogRead(A1) / 8;
 		mValue[count + 9] = analogRead(A0) / 8;
-		//	delay(10);
 	}
 
 	// Assign value to Controller
@@ -368,7 +337,7 @@ void readControls()
 	}
 
 	/*
-	//
+	//	Controller Template
 	if (XXXValue != LastXXXValue)
 	{
 	LastXXXValue = XXXValue;
