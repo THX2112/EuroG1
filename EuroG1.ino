@@ -80,7 +80,7 @@ int r2 = 0;      //value of select pin at the 4051 (s2)
 int count = 0;   //which y pin we are selecting
 int mValue[17];
 int trig = 9;		//	Pin 9 for gate input
-bool triggered;
+bool triggered = false;
 bool checkTrig;
 int note = 0;
 int sentNote = 0;
@@ -104,13 +104,13 @@ void setup()
 	pinMode(12, OUTPUT);    // s2
 
 	//trueDelay(100);
-	delay(100);
+	//delay(100);
 
 	//Vcc = readVcc() / 1000.0;
 
-	
+
 	//	Set prescale for faster analogRead
-	
+
 	// defines for setting and clearing register bits
 	//#ifndef cbi
 	//#define cbi(sfr, bit) (_SFR_BYTE(sfr) &= ~_BV(bit))
@@ -131,7 +131,7 @@ void loop()
 {
 	//	Only check controls every 1ms for less MIDI latency.
 	//if (trueMillis() - controlTimer > 1)
-	if (millis() - controlTimer > 1)
+	if (millis() - controlTimer > 5)
 
 	{
 		//controlTimer = trueMillis();
@@ -172,6 +172,10 @@ void loop()
 
 	//	Handle MIDI Note-Ons and Note-Offs
 	MIDI.read();	//	All MIDI inputs passed through to G1.
+
+	//	Stop dead notes if a sequencer stops
+	if (MIDI.getType() == midi::Stop) { allNotesOff; }
+
 }
 
 void readControls()
