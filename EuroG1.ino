@@ -1,12 +1,19 @@
 #include <digitalWriteFast.h>
 #include <MIDI.h>
 
-MIDI_CREATE_DEFAULT_INSTANCE();
+struct MySettings : public midi::DefaultSettings
+{
+	//static const bool UseRunningStatus = false;
+	static const bool UseHandleNullVelocityNoteOnAsNoteOff = false;
+};
+MIDI_CREATE_CUSTOM_INSTANCE(HardwareSerial, Serial, MIDI, MySettings);
+
+//MIDI_CREATE_DEFAULT_INSTANCE();
 
 unsigned long controlTimer = 0;
 
 //
-//	ASSIGN CONTROLS TO MIDI CC
+//	**ASSIGN CONTROLS TO MIDI CC**
 //
 
 int CC07MasterVolume = 4;	//	A4
@@ -33,45 +40,45 @@ int CVIn = A7;
 
 //	CONTROL VALUES
 
-int CC07MasterVolumeValue;
-int CC01LFOFilterModValue;
-int CC16LFORateValue;
+int CC07MasterVolumeValue = -1;
+int CC01LFOFilterModValue = -1;
+int CC16LFORateValue = -1;
 bool CC20LFOWaveValue;
-int CC74VCFCutoffValue;
-int CC71VCFRezValue;
-int CC82VCFEnvAValue;
-int CC83VCFEnvDValue;
-int CC28VCFEnvSValue;
-int CC29VCFEnvRValue;
-int CC81VCFEnvModValue;
-int CC76VCOWaveValue;
-int CC04VCOWrapValue;
-int CC21VCORangeValue;
-int CC93VCODetuneValue;
-int CC73VCAEnvAValue;
-int CC75VCAEnvDValue;
-int CC31VCAEnvSValue;
-int CC72VCAEnvRValue;
+int CC74VCFCutoffValue = -1;
+int CC71VCFRezValue = -1;
+int CC82VCFEnvAValue = -1;
+int CC83VCFEnvDValue = -1;
+int CC28VCFEnvSValue = -1;
+int CC29VCFEnvRValue = -1;
+int CC81VCFEnvModValue = -1;
+int CC76VCOWaveValue = -1;
+int CC04VCOWrapValue = -1;
+int CC21VCORangeValue = -1;
+int CC93VCODetuneValue = -1;
+int CC73VCAEnvAValue = -1;
+int CC75VCAEnvDValue = -1;
+int CC31VCAEnvSValue = -1;
+int CC72VCAEnvRValue = -1;
 
-int LastCC07MasterVolumeValue;
-int LastCC01LFOFilterModValue;
-int LastCC16LFORateValue;
+int LastCC07MasterVolumeValue = 999;
+int LastCC01LFOFilterModValue = 999;
+int LastCC16LFORateValue = 999;
 bool LastCC20LFOWaveValue;
-int LastCC74VCFCutoffValue;
-int LastCC71VCFRezValue;
-int LastCC82VCFEnvAValue;
-int LastCC83VCFEnvDValue;
-int LastCC28VCFEnvSValue;
-int LastCC29VCFEnvRValue;
-int LastCC81VCFEnvModValue;
-int LastCC76VCOWaveValue;
-int LastCC04VCOWrapValue;
-int LastCC21VCORangeValue;
-int LastCC93VCODetuneValue;
-int LastCC73VCAEnvAValue;
-int LastCC75VCAEnvDValue;
-int LastCC31VCAEnvSValue;
-int LastCC72VCAEnvRValue;
+int LastCC74VCFCutoffValue = 999;
+int LastCC71VCFRezValue = 999;
+int LastCC82VCFEnvAValue = 999;
+int LastCC83VCFEnvDValue = 999;
+int LastCC28VCFEnvSValue = 999;
+int LastCC29VCFEnvRValue = 999;
+int LastCC81VCFEnvModValue = 999;
+int LastCC76VCOWaveValue = 999;
+int LastCC04VCOWrapValue = 999;
+int LastCC21VCORangeValue = 999;
+int LastCC93VCODetuneValue = 999;
+int LastCC73VCAEnvAValue = 999;
+int LastCC75VCAEnvDValue = 999;
+int LastCC31VCAEnvSValue = 999;
+int LastCC72VCAEnvRValue = 999;
 
 int r0 = 0;      //value of select pin at the 4051 (s0)
 int r1 = 0;      //value of select pin at the 4051 (s1)
@@ -89,10 +96,16 @@ float floatNote;
 double Vcc;
 int dSentNote;
 int dNote;
+int velocity;
+int noteTransposedM;
+int noteTransposed;
+int noteM = 0;
+int sentNoteM = 0;
 
 void setup()
 {
 	MIDI.begin(MIDI_CHANNEL_OMNI);
+	MIDI.turnThruOff();
 	pinMode(CC20LFOWave, INPUT_PULLUP);
 	pinMode(9, INPUT);
 
@@ -103,6 +116,10 @@ void setup()
 
 	//	Kill any spurious notes on startup.
 	allNotesOff();
+	delay(100);
+	readControls();
+	//delay(3000);
+	//allNotesOff();
 }
 
 void loop()
@@ -115,7 +132,9 @@ void loop()
 		readControls();
 	}
 
+	//
 	//	Handle CV/GATE inputs
+	//
 	checkTrig = digitalRead(trig);
 	if (checkTrig)		//	Key pressed.
 	{
@@ -123,12 +142,15 @@ void loop()
 		ADCValue = analogRead(CVIn);
 		voltage = ((ADCValue / 1024.0) * 5);
 		note = ((voltage / .083) + .5);
-		dNote = (note + 12);
-		if (note != sentNote || triggered==false) {		//	If this is a new note OR a first note...
+		noteTransposed = note - 12; // note+12 fits MIDI note number to CV range, but shift it two octaves to have better bass CV range.
+		if (noteTransposed != sentNote || triggered == false)
+		{		//	If this is a new note OR a first note...
 			MIDI.sendNoteOff(sentNote, 0, 1);			//	Stop previous note in case it's still playing.
-			MIDI.sendNoteOn(note, 127, 1);
-			sentNote = note;
-			dSentNote = dNote;
+			if ((noteTransposed >= 0) && (noteTransposed <= 48))	//	Don't really play note if its out of range. Note that this changes depending on how much it's transposed. Un-transposed playable range is 0-61.
+			{
+				MIDI.sendNoteOn(noteTransposed, 127, 1);
+			}
+			sentNote = noteTransposed;
 			triggered = true;
 		}
 	}
@@ -136,16 +158,47 @@ void loop()
 	if (!checkTrig && triggered)		//	First Key up
 	{
 		MIDI.sendNoteOff(sentNote, 0, 1);
-
 		triggered = false;
 	}
+	//
+	//	Handle MIDI Note-Ons and Note-Offs. Treat MIDI as monophonic.
+	//
+	if (MIDI.read()) 
+	{					
+		noteM = MIDI.getData1();
+		noteTransposedM = noteM-24; // Fit range of typical keyboard better.
+		velocity = MIDI.getData2();
 
-	//	Handle MIDI Note-Ons and Note-Offs
-	MIDI.read();	//	All MIDI inputs passed through to G1.
+		if (MIDI.getType() == midi::NoteOn)	//	Only pass NoteOn/NoteOff to G1
+		{
+			if (velocity == 0)
+			{
+				MIDI.sendNoteOff(noteTransposedM, 0, 1);
+			}
 
-	//	Stop dead notes if a sequencer stops
-	if (MIDI.getType() == midi::Stop) { allNotesOff; }
+			else
+			{
+				if ((noteTransposedM >= 0) && (noteTransposedM <= 84))
+				{
+					MIDI.sendNoteOff(sentNoteM, 0, 1);
+					MIDI.sendNoteOn(noteTransposedM, 127, 1);
+					sentNoteM = noteTransposedM;
+				}
+			}
+		}
 
+		if (MIDI.getType() == midi::NoteOff)
+		{
+			MIDI.sendNoteOff(noteTransposedM, 0, 1);
+		}
+
+		if (MIDI.getType() == midi::ControlChange)
+		{
+			MIDI.sendControlChange(MIDI.getData1(), MIDI.getData2(),1);
+		}
+
+		if (MIDI.getType() == midi::Stop) { allNotesOff(); } //	Stop dead notes if a sequencer stops
+	}
 }
 
 void readControls()
@@ -175,7 +228,7 @@ void readControls()
 	CC93VCODetuneValue = mValue[3];
 	CC04VCOWrapValue = mValue[4];
 	CC74VCFCutoffValue = mValue[5];
-	CC71VCFRezValue = mValue[6];
+	CC71VCFRezValue = mValue[6]/1.5;	//	Reduce resonance a bit more
 	CC16LFORateValue = mValue[7];
 	CC01LFOFilterModValue = mValue[8];
 	CC82VCFEnvAValue = mValue[9];
@@ -362,8 +415,9 @@ long readVcc()
 
 void allNotesOff()
 {
-	for (count = 0; count <= 127; count++)
+	for (int offNote = 0; offNote <= 127; offNote++)
 	{
-		MIDI.sendNoteOff(count, 0, 1);
+		MIDI.sendNoteOff(offNote, 0, 1);
+		//delay(10);
 	}
 }
